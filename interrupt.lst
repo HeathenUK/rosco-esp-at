@@ -1,0 +1,316 @@
+F00:0001               section .text
+F00:0002               align 2
+F00:0003       ; DUART register offsets
+F00:0004       DUART_MRA       equ     $00
+F00:0005       DUART_CSRA      equ     $02
+F00:0006       DUART_SRA       equ     $02
+F00:0007       DUART_CRA       equ     $04
+F00:0008       DUART_RBA       equ     $06
+F00:0009       DUART_IMR       equ     $0a
+F00:0010       DUART_ISR       equ     $0a
+F00:0011       DUART_MRB       equ     $10
+F00:0012       DUART_SRB       equ     $12
+F00:0013       DUART_CSRB      equ     $12
+F00:0014       DUART_CRB       equ     $14
+F00:0015       DUART_RBB       equ     $16
+F00:0016       
+F00:0017       ; DUART interrupt vector address
+F00:0018       VECADDR         equ     $45<<2
+F00:0019       
+F00:0020       
+F00:0021       ; C callable - void install_interrupt(CHAR_DEVICE *device, RingBuffer *uart_a, RingBuffer *uart_b)
+F00:0022       ;
+F00:0023       ; If you don't want to install for both UARTs, pass NULL for either RingBuffer pointer.
+F00:0024       ;
+F00:0025       install_interrupt::
+F00:0026               movem.l A0-A1/D0,-(A7)
+               S01:00000000:  48 E7 80 C0
+F00:0027       
+F00:0028               move.w  SR,D0                           ; Save SR
+               S01:00000004:  40 C0
+F00:0029               or.w    #$0700,SR                       ; No interrupts for a bit
+               S01:00000006:  00 7C 07 00
+F00:0030       
+F00:0031               move.l  16(A7),A0                       ; Get BASEADDR structure
+               S01:0000000A:  20 6F 00 10
+F00:0032               move.l  (A0),A0                         ; Get base address
+               S01:0000000E:  20 50
+F00:0033       
+F00:0034               move.l  20(A7),A1                       ; Get RingBuffer A pointer
+               S01:00000010:  22 6F 00 14
+F00:0035               move.l  A1,RINGBUF_A                    ; Store it
+               S01:00000014:  23 C9 00 00 00 00 [R]
+F00:0036               beq.s   .uartb                          ; Skip setup if it's NULL
+               S01:0000001A:  67 14
+F00:0037       
+F00:0038               ; Ensure UART A is set up just like we like it...
+F00:0039               move.b  #$88,DUART_CSRA(A0)             ; 115K2
+               S01:0000001C:  11 7C 00 88 00 02
+F00:0040               move.b  #$10,DUART_CRA(A0)              ; Reset to MR1A
+               S01:00000022:  11 7C 00 10 00 04
+F00:0041               move.b  #$13,DUART_MRA(A0)              ; Ensure No RTS, RxRDY, Char, No parity, 8 bits
+               S01:00000028:  10 BC 00 13
+F00:0042               move.b  #$07,DUART_MRA(A0)              ; (Normal, No TX CTS/RTS, 1 stop bit)
+               S01:0000002C:  10 BC 00 07
+F00:0043       
+F00:0044       .uartb
+F00:0045               move.l  24(A7),A1                       ; Get RingBuffer B pointer
+               S01:00000030:  22 6F 00 18
+F00:0046               move.l  A1,RINGBUF_B                    ; Dereference and store it
+               S01:00000034:  23 C9 00 00 00 04 [R]
+F00:0047               beq.s   .done                           ; Skip setup if it's NULL
+               S01:0000003A:  67 18
+F00:0048       
+F00:0049               ; Ensure UART B is set up just like we like it...
+F00:0050               move.b  #$88,DUART_CSRB(A0)             ; 115K2
+               S01:0000003C:  11 7C 00 88 00 12
+F00:0051               move.b  #$10,DUART_CRB(A0)              ; Reset to MR1B
+               S01:00000042:  11 7C 00 10 00 14
+F00:0052               move.b  #$13,DUART_MRB(A0)              ; Ensure No RTS, RxRDY, Char, No parity, 8 bits
+               S01:00000048:  11 7C 00 13 00 10
+F00:0053               move.b  #$07,DUART_MRB(A0)              ; (Normal, No TX CTS/RTS, 1 stop bit)
+               S01:0000004E:  11 7C 00 07 00 10
+F00:0054       
+F00:0055       .done
+F00:0056               move.l  A0,BASEADDR                     ; Store BASEADDR base pointer
+               S01:00000054:  23 C8 00 00 00 08 [R]
+F00:0057               move.l  VECADDR,CHAIN                   ; Store existing handler
+               S01:0000005A:  23 F8 01 14 00 00 00 0C [R]
+F00:0058               move.l  #HANDLER,VECADDR                ; And install new one
+               S01:00000062:  21 FC 00 00 00 9E 01 14 [R]
+F00:0059       
+F00:0060               move.b  #$28,DUART_IMR(A0)              ; Enable RXRDY/RXFULL interrupt and keep counter going
+               S01:0000006A:  11 7C 00 28 00 0A
+F00:0061               move.w  D0,SR                           ; Re-enable interrupts
+               S01:00000070:  46 C0
+F00:0062       
+F00:0063               movem.l (A7)+,A0-A1/D0
+               S01:00000072:  4C DF 03 01
+F00:0064               rts
+               S01:00000076:  4E 75
+F00:0065       
+F00:0066       
+F00:0067       ; C callable - void remove_interrupt(void)
+F00:0068       ;
+F00:0069       remove_interrupt::
+F00:0070               movem.l D0/A0-A1,-(A7)
+               S01:00000078:  48 E7 80 C0
+F00:0071       
+F00:0072               move.w  SR,D0                           ; Save SR
+               S01:0000007C:  40 C0
+F00:0073               or.w    #$0700,SR                       ; No interrupts for a bit
+               S01:0000007E:  00 7C 07 00
+F00:0074       
+F00:0075               move.l  CHAIN,VECADDR                   ; Restore original handler
+               S01:00000082:  21 F9 00 00 00 0C 01 14 [R]
+F00:0076               move.l  BASEADDR,A0                     ; Get BASEADDR structure
+               S01:0000008A:  20 79 00 00 00 08 [R]
+F00:0077               move.b  #$08,DUART_IMR(A0)              ; Just keep counter going
+               S01:00000090:  11 7C 00 08 00 0A
+F00:0078       
+F00:0079               move.w  D0,SR                           ; Re-enable interrupts
+               S01:00000096:  46 C0
+F00:0080               movem.l (A7)+,D0/A0-A1
+               S01:00000098:  4C DF 03 01
+F00:0081               rts
+               S01:0000009C:  4E 75
+F00:0082       
+F00:0083       
+F00:0084       ; The interrupt handler (also chains to the original handler)
+F00:0085       HANDLER:
+F00:0086               movem.l D0-D1/A0-A2,-(A7)
+               S01:0000009E:  48 E7 C0 E0
+F00:0087               move.l  BASEADDR,A0                     ; Load BASEADDR pointer
+               S01:000000A2:  20 79 00 00 00 08 [R]
+F00:0088               move.l  #buffer_char,A1                 ; Buffer routine in A1
+               S01:000000A8:  43 F9 00 00 00 00 [R]
+F00:0089               move.l  RINGBUF_A,A2                    ; UART A RingBuffer in A2
+               S01:000000AE:  24 79 00 00 00 00 [R]
+F00:0090               cmp.l   #0,A2                           ; Is the pointer NULL?
+               S01:000000B4:  B4 FC 00 00
+F00:0091               beq.s   .uartB                          ; Skip to DUART B if so...
+               S01:000000B8:  67 2E
+F00:0092       
+F00:0093       ;; UART A
+F00:0094       .loopA
+F00:0095               move.b  DUART_ISR(A0),D0
+               S01:000000BA:  10 28 00 0A
+F00:0096               btst    #1,D0                           ; Check if ready bit is set
+               S01:000000BE:  08 00 00 01
+F00:0097               beq.s   .uartB                          ; Just bail now if not (and go check UART B)
+               S01:000000C2:  67 24
+F00:0098       
+F00:0099               move.b  DUART_SRA,D0                    ; Check if error bits are set
+               S01:000000C4:  10 38 00 02
+F00:0100               and.b   #$F0,D0
+               S01:000000C8:  C0 3C 00 F0
+F00:0101               beq.s   .contA                          ; Continue if not...
+               S01:000000CC:  67 02
+F00:0102               bsr.s   .error                          ; ... else branch error subroutine
+               S01:000000CE:  61 08
+F00:0103       
+F00:0104       .contA
+F00:0105               move.b  DUART_RBA(A0),D0                ; Grab character from A receive buffer
+               S01:000000D0:  10 28 00 06
+F00:0106               jsr     (A1)                            ; Call buffer_char
+               S01:000000D4:  4E 91
+F00:0107       
+F00:0108               bra.s   .loopA                          ; And continue testing...
+               S01:000000D6:  60 E2
+F00:0109       
+F00:0110       ; .error is a subroutine, used by both A and B
+F00:0111       .error
+F00:0112               move.b  D0,D1                           ; Every day I'm shufflin' (registers)
+               S01:000000D8:  12 00
+F00:0113               btst    #4,D1                           ; Overrun error?
+               S01:000000DA:  08 01 00 04
+F00:0114               beq.s   .notoverrun        
+               S01:000000DE:  67 06
+F00:0115               move.b  #$40,DUART_CRA(A0)              ; Reset overrun error status
+               S01:000000E0:  11 7C 00 40 00 04
+F00:0116       
+F00:0117       .notoverrun
+F00:0118               ifd ERROR_REPORTING
+F00:0119       
+F00:0120               btst    #5,D1                           ; Parity error?
+F00:0121               beq.s   .notparity
+F00:0122       
+F00:0123               move.b  #'P',D0
+F00:0124               jsr     (A1)                            ; Call buffer_char
+F00:0125               move.b  #'?',D0
+F00:0126               jsr     (A1)                            ; Call buffer_char
+F00:0127       
+F00:0128       .notparity
+F00:0129               btst    #6,D1                           ; Frame error?
+F00:0130               beq.s   .notframe
+F00:0131       
+F00:0132               move.b  #'F',D0
+F00:0133               jsr     (A1)                            ; Call buffer_char
+F00:0134               move.b  #'?',D0
+F00:0135               jsr     (A1)                            ; Call buffer_char
+F00:0136       
+F00:0137       .notframe
+F00:0138               btst    #7,D1                           ; Break?
+F00:0139               beq.s   .notbreak
+F00:0140       
+F00:0141               move.b  #'B',D0
+F00:0142               jsr     (A1)                            ; Call buffer_char
+F00:0143               move.b  #'?',D0
+F00:0144               jsr     (A1)                            ; Call buffer_char
+F00:0145       
+F00:0146       .notbreak
+F00:0147               endif ; ERROR_REPORTING
+F00:0148               rts
+               S01:000000E6:  4E 75
+F00:0149               
+F00:0150       ;; UART B
+F00:0151       .uartB
+F00:0152               move.l  RINGBUF_B,A2                    ; UART B RingBuffer in A2
+               S01:000000E8:  24 79 00 00 00 04 [R]
+F00:0153               cmp.l   #0,A2                           ; Is the pointer NULL?
+               S01:000000EE:  B4 FC 00 00
+F00:0154               beq.s   .chain                          ; Skip to chained handler if so...
+               S01:000000F2:  67 1E
+F00:0155       
+F00:0156       .loopB
+F00:0157               move.b  DUART_ISR(A0),D0
+               S01:000000F4:  10 28 00 0A
+F00:0158               btst    #5,D0                           ; Check if ready bit is set
+               S01:000000F8:  08 00 00 05
+F00:0159               beq.s   .chain                          ; Just bail now if not (and go check timer tick)
+               S01:000000FC:  67 14
+F00:0160       
+F00:0161               move.b  DUART_SRB,D0                    ; Check if error bits are set
+               S01:000000FE:  10 38 00 12
+F00:0162               and.b   #$F0,D0
+               S01:00000102:  C0 3C 00 F0
+F00:0163               beq.s   .contB                          ; Continue if not...
+               S01:00000106:  67 02
+F00:0164               bsr.s   .error                          ; ... else branch error subroutine
+               S01:00000108:  61 CE
+F00:0165       
+F00:0166       .contB
+F00:0167               move.b  DUART_RBB(A0),D0                ; Grab character from B receive buffer
+               S01:0000010A:  10 28 00 16
+F00:0168               jsr     (A1)                            ; Call buffer_char
+               S01:0000010E:  4E 91
+F00:0169       
+F00:0170               bra.s   .loopB                          ; And continue testing...
+               S01:00000110:  60 E2
+F00:0171       
+F00:0172       .chain
+F00:0173               movem.l (A7)+,D0-D1/A0-A2               ; Restore regs...
+               S01:00000112:  4C DF 07 03
+F00:0174               move.l  CHAIN,-(A7)                     ; And "return to" the original ISR
+               S01:00000116:  2F 39 00 00 00 0C [R]
+F00:0175               rts
+               S01:0000011C:  4E 75
+F00:0176       
+F00:0177       
+F00:0178               section .bss
+F00:0179               align 2
+F00:0180       RINGBUF_A   dc.l        0                       ; Ringbuffer for UART A
+               S02:00000000:  00 00 00 00
+F00:0181       RINGBUF_B   dc.l        0                       ; Ringbuffer for UART B
+               S02:00000004:  00 00 00 00
+F00:0182       BASEADDR    dc.l        0                       ; DUART base address from CHAR_DEVICE struct     
+               S02:00000008:  00 00 00 00
+F00:0183       CHAIN       dc.l        0                       ; Chained ISR (timer tick probably)
+               S02:0000000C:  00 00 00 00
+F00:0184       
+F00:0185       
+
+
+Sections:
+S01  .text
+S02  .bss
+
+
+Sources:
+F00  interrupt.asm
+
+
+Symbols:
+ HANDLER .contB LAB (0x10a) sec=.text 
+ HANDLER .loopB LAB (0xf4) sec=.text 
+ HANDLER .chain LAB (0x112) sec=.text 
+ HANDLER .notoverrun LAB (0xe6) sec=.text 
+ HANDLER .error LAB (0xd8) sec=.text 
+ HANDLER .contA LAB (0xd0) sec=.text 
+ HANDLER .loopA LAB (0xba) sec=.text 
+ HANDLER .uartB LAB (0xe8) sec=.text 
+buffer_char IMP REF 
+remove_interrupt LAB (0x78) UNUSED EXPORT sec=.text 
+HANDLER LAB (0x9e) REF sec=.text 
+CHAIN LAB (0xc) REF sec=.bss 
+BASEADDR LAB (0x8) REF sec=.bss 
+ install_interrupt .done LAB (0x54) sec=.text 
+RINGBUF_B LAB (0x4) REF sec=.bss 
+ install_interrupt .uartb LAB (0x30) sec=.text 
+RINGBUF_A LAB (0x0) REF sec=.bss 
+install_interrupt LAB (0x0) UNUSED EXPORT sec=.text 
+VECADDR EXPR(276=0x114) EQU 
+DUART_RBB EXPR(22=0x16) EQU 
+DUART_CRB EXPR(20=0x14) EQU 
+DUART_CSRB EXPR(18=0x12) EQU 
+DUART_SRB EXPR(18=0x12) EQU 
+DUART_MRB EXPR(16=0x10) EQU 
+DUART_ISR EXPR(10=0xa) EQU 
+DUART_IMR EXPR(10=0xa) EQU 
+DUART_RBA EXPR(6=0x6) EQU 
+DUART_CRA EXPR(4=0x4) EQU 
+DUART_SRA EXPR(2=0x2) EQU 
+DUART_CSRA EXPR(2=0x2) EQU 
+DUART_MRA EXPR(0=0x0) EQU 
+_MOVEMBYTES EXPR(20=0x14) INTERNAL 
+ MOVEMSIZE EXPR(4=0x4) INTERNAL 
+_MOVEMREGS EXPR(1795=0x703) INTERNAL 
+__LINE__ EXPR(185=0xb9) INTERNAL 
+__FO EXPR(0=0x0) INTERNAL 
+__RS EXPR(0=0x0) INTERNAL 
+REPTN EXPR(-1=0xffffffff) INTERNAL 
+__VASM EXPR(2=0x2) INTERNAL 
+ROSCO_M68K EXPR(1=0x1) UNUSED 
+__UNIXFS EXPR(0=0x0) INTERNAL 
+
+There have been no errors.

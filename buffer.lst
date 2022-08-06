@@ -1,0 +1,120 @@
+F00:0001               section .text
+F00:0002               align 2
+F00:0003       ; ASM callable - pass character in D0
+F00:0004       ;
+F00:0005       ; Expects to be called in interrupt context, not re-entrant.
+F00:0006       ;
+F00:0007       ; Arguments:
+F00:0008       ;
+F00:0009       ;   A2   - RingBuffer pointer
+F00:0010       ;   D0.B - The character
+F00:0011       ;
+F00:0012       buffer_char::
+F00:0013               movem.l A0/D1-D2,-(A7)                  ; Stash regs
+               S01:00000000:  48 E7 60 80
+F00:0014               lea.l   6(A2),A0                        ; Point A0 to the data buffer
+               S01:00000004:  41 EA 00 06
+F00:0015               move.w  2(A2),D1                        ; Get the current write pointer into D1
+               S01:00000008:  32 2A 00 02
+F00:0016               move.w  4(A2),D2                        ; Get mask into D2
+               S01:0000000C:  34 2A 00 04
+F00:0017               move.b  D0,(A0,D1)                      ; Buffer the character
+               S01:00000010:  11 80 10 00
+F00:0018               addi.w  #1,D1                           ; Increment write pointer...
+               S01:00000014:  52 41
+F00:0019               and.w   D2,D1                           ; ... keep it within range
+               S01:00000016:  C2 42
+F00:0020               move.w  D1,2(A2)                        ; ... and store it back in the struct
+               S01:00000018:  35 41 00 02
+F00:0021               movem.l (A7)+,A0/D1-D2                  ; Restore regs
+               S01:0000001C:  4C DF 01 06
+F00:0022               rts                                     ; Fin.
+               S01:00000020:  4E 75
+F00:0023       
+F00:0024       
+F00:0025       ; C-callable - pass RingBuffer pointer and a 1K buffer on the stack. Returns actual count.
+F00:0026       ;
+F00:0027       ; uint16_t unbuffer(RingBuffer *rb, uint8_t *outBuffer)
+F00:0028       ;
+F00:0029       unbuffer::
+F00:0030               movem.l D1-D4/A0-A1,-(A7)
+               S01:00000022:  48 E7 78 C0
+F00:0031               move.w  SR,D4                           ; Save SR
+               S01:00000026:  40 C4
+F00:0032               or.w    #$0700,SR                       ; No interrupts for a bit
+               S01:00000028:  00 7C 07 00
+F00:0033       
+F00:0034               move.l  28(A7),A0                       ; Load internal buffer into A0
+               S01:0000002C:  20 6F 00 1C
+F00:0035               move.l  32(A7),A1                       ; Load out buffer into A1
+               S01:00000030:  22 6F 00 20
+F00:0036               clr.l   D0                              ; Zero return value
+               S01:00000034:  70 00
+F00:0037       
+F00:0038               move.w  (A0)+,D1                        ; D1 is R pointer
+               S01:00000036:  32 18
+F00:0039               move.w  (A0)+,D2                        ; D2 is W pointer
+               S01:00000038:  34 18
+F00:0040               move.w  (A0)+,D3                        ; D3 is mask
+               S01:0000003A:  36 18
+F00:0041       
+F00:0042       .loop
+F00:0043               cmp.w   D2,D1                           ; Are pointers equal?
+               S01:0000003C:  B2 42
+F00:0044               beq.s   .done                           ; Leave now if so...
+               S01:0000003E:  67 0C
+F00:0045       
+F00:0046               move.b  (A0,D1),(A1)+                   ; Copy byte into out buffer
+               S01:00000040:  12 F0 10 00
+F00:0047               addi.w  #1,D0                           ; Increment return value (count)
+               S01:00000044:  52 40
+F00:0048               addi.w  #1,D1                           ; Increment read pointer...
+               S01:00000046:  52 41
+F00:0049               and.w   D3,D1                           ; ... and wrap is > size
+               S01:00000048:  C2 43
+F00:0050               bra.s   .loop                           ; Let's go again!
+               S01:0000004A:  60 F0
+F00:0051       
+F00:0052       .done:
+F00:0053               move.l  28(A7),A0                       ; Re-fetch RingBuffer pointer
+               S01:0000004C:  20 6F 00 1C
+F00:0054               move.w  D1,(A0)                         ; Store updated read pointer
+               S01:00000050:  30 81
+F00:0055               move.w  D4,SR                           ; Re-enable interrupts
+               S01:00000052:  46 C4
+F00:0056               movem.l (A7)+,D1-D4/A0-A1
+               S01:00000054:  4C DF 03 1E
+F00:0057               rts
+               S01:00000058:  4E 75
+F00:0058       
+F00:0059               section .bss
+F00:0060               align 2
+F00:0061       
+
+
+Sections:
+S01  .text
+S02  .bss
+
+
+Sources:
+F00  buffer.asm
+
+
+Symbols:
+ unbuffer .done LAB (0x4c) sec=.text 
+ unbuffer .loop LAB (0x3c) sec=.text 
+unbuffer LAB (0x22) UNUSED EXPORT sec=.text 
+buffer_char LAB (0x0) UNUSED EXPORT sec=.text 
+_MOVEMBYTES EXPR(24=0x18) INTERNAL 
+ MOVEMSIZE EXPR(4=0x4) INTERNAL 
+_MOVEMREGS EXPR(798=0x31e) INTERNAL 
+__LINE__ EXPR(61=0x3d) INTERNAL 
+__FO EXPR(0=0x0) INTERNAL 
+__RS EXPR(0=0x0) INTERNAL 
+REPTN EXPR(-1=0xffffffff) INTERNAL 
+__VASM EXPR(2=0x2) INTERNAL 
+ROSCO_M68K EXPR(1=0x1) UNUSED 
+__UNIXFS EXPR(0=0x0) INTERNAL 
+
+There have been no errors.
