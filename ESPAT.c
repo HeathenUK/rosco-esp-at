@@ -6,6 +6,13 @@
 #include <malloc.h>
 #include "ESPAT.h"
 
+#ifdef DEBUG_A
+//#define DEBUGF(...) do { printf(__VA_ARGS__); } while (0)
+#define DEBUGF(...) do { CharDevice duart_a; if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, __VA_ARGS__); }} while (0)
+#else
+#define DEBUGF(...)
+#endif
+
 #define STANDARD_NOP 1000
 
 void nop_loop(uint16_t n) {
@@ -16,8 +23,14 @@ void nop_loop(uint16_t n) {
 
 }
 
-bool queryraised;
-AT_packet at;
+static ESP_Query I2C = {
+    .status     =   NO_QUERY,
+    .type       =   I2C_READ,
+    .preamble   =   "+DRVI2CRD:",
+    .data_len   =   0,
+    .data_ptr   =   0,
+    .state      =   STATE_DISCARD
+};
 
 extern uint16_t unbuffer(RingBuffer *rb, unsigned char *buffer);
 
@@ -43,119 +56,120 @@ uint16_t process_incoming_esp(State_esp *state) {
 
         for (int i = 0; i < count; i++) {
             
-            if (queryraised == true) {
-                fctprintf(mcSendDevice, &duart_a, "Processing following a query being raised, prior c was %c (0X%02x)\r\n", last_c, last_c);
+            if (I2C.status == QUERY_RAISED) {
+                DEBUGF(mcSendDevice, &duart_a, "Processing following a query being raised, prior c was %c (0X%02x)\r\n", last_c, last_c);
 
-                switch(state->state) {
+                switch(I2C.state) {
                     
                     case STATE_DISCARD:
                         if (buffer[i] == '+' && last_c != 'T') {
-                            state->state = STATE_AWAIT_D;
-                            fctprintf(mcSendDevice, &duart_a, "Non-AT + received\r\n");
+                            I2C.state = STATE_AWAIT_D;
+                            DEBUGF(mcSendDevice, &duart_a, "Non-AT + received\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
                     
                     case STATE_AWAIT_D:
                         if (buffer[i] == 'D') {
-                                state->state = STATE_AWAIT_R;
-                                fctprintf(mcSendDevice, &duart_a, "Got a D!\r\n");
+                                I2C.state = STATE_AWAIT_R;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a D!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
                             
                     case STATE_AWAIT_R:
                         if (buffer[i] == 'R') {
-                                state->state = STATE_AWAIT_V;
-                                fctprintf(mcSendDevice, &duart_a, "Got an R!\r\n");
+                                I2C.state = STATE_AWAIT_V;
+                                DEBUGF(mcSendDevice, &duart_a, "Got an R!\r\n");
                                 printf("%c", buffer[i]);
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_V:
                         if (buffer[i] == 'V') {
-                                state->state = STATE_AWAIT_I;
-                                fctprintf(mcSendDevice, &duart_a, "Got a V!\r\n");
+                                I2C.state = STATE_AWAIT_I;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a V!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_I:
                         if (buffer[i] == 'I') {
-                                state->state = STATE_AWAIT_2;
-                                fctprintf(mcSendDevice, &duart_a, "Got an I!\r\n");
+                                I2C.state = STATE_AWAIT_2;
+                                DEBUGF(mcSendDevice, &duart_a, "Got an I!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_2:
                         if (buffer[i] == '2') {
-                                state->state = STATE_AWAIT_C;
-                                fctprintf(mcSendDevice, &duart_a, "Got a 2!\r\n");
+                                I2C.state = STATE_AWAIT_C;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a 2!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_C:
                         if (buffer[i] == 'C') {
-                                state->state = STATE_AWAIT_R2;
-                                fctprintf(mcSendDevice, &duart_a, "Got a C!\r\n");
+                                I2C.state = STATE_AWAIT_R2;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a C!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_R2:
                         if (buffer[i] == 'R') {
-                                state->state = STATE_AWAIT_D2;
-                                fctprintf(mcSendDevice, &duart_a, "Got an R!\r\n");
+                                I2C.state = STATE_AWAIT_D2;
+                                DEBUGF(mcSendDevice, &duart_a, "Got an R!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_D2:
                         if (buffer[i] == 'D') {
-                                state->state = STATE_AWAIT_COLON;
-                                fctprintf(mcSendDevice, &duart_a, "Got a D!\r\n");
+                                I2C.state = STATE_AWAIT_COLON;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a D!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_COLON:
                         if (buffer[i] == ':') {
-                                at.data_ptr = 0;
-                                state->state = STATE_AWAIT_DATA;
-                                fctprintf(mcSendDevice, &duart_a, "Got a colon!\r\n");
+                                I2C.data_ptr = 0;
+                                I2C.state = STATE_AWAIT_DATA;
+                                DEBUGF(mcSendDevice, &duart_a, "Got a colon!\r\n");
                         } else {
-                            state->state = STATE_DISCARD;
+                            I2C.state = STATE_DISCARD;
                             printf("%c", buffer[i]);
                         }
                         break;
 
                     case STATE_AWAIT_DATA:
-                        at.data[at.data_ptr++] = buffer[i];
-                        if (at.data_ptr == at.data_len) {
-                            queryraised = false;
-                            state->state = STATE_DISCARD;
-                            fctprintf(mcSendDevice, &duart_a, "Completed a query with value 0x%02x!\r\n", *at.data);
+                        I2C.query_data[I2C.data_ptr++] = buffer[i];
+                        if (I2C.data_ptr == I2C.data_len) {
+                            //queryraised = false;
+                            I2C.state = STATE_DISCARD;
+                            I2C.status = NO_QUERY;
+                            fctprintf(mcSendDevice, &duart_a, "Completed a query with value 0x%02x!\r\n", *I2C.query_data);
                         }
                         break;
 
@@ -176,11 +190,12 @@ void i2c_read(CharDevice *uart, unsigned int i2caddr, uint8_t reg, uint8_t len) 
     //fctprintf(mcSendDevice, uart, "AT+DRVI2CWRBYTES=0,0x%02x,1,0x%02x\r", i2caddr, reg);
     nop_loop(STANDARD_NOP);
     //if (mcGetDevice(0, &duart_a)) fctprintf(mcSendDevice, &duart_a, "AT+DRVI2CWRBYTES=0,0x%02X,2,0x%02X40\r\n", i2caddr, cmd);
-    at.data_len = len;
+    I2C.data_len = len;
     nop_loop(STANDARD_NOP);
     fctprintf(mcSendDevice, uart, "AT+DRVI2CRD=0,0x%02x,%d\r", i2caddr, len);
     printf("\n");
-    queryraised = true;
+    //queryraised = true;
+    I2C.status = QUERY_RAISED;
     nop_loop(STANDARD_NOP);
 
 }
