@@ -815,6 +815,8 @@ extern void remove_interrupt();
 
 static RingBuffer uart_b;
 
+// extern AT_packet at;
+
 int main(int argc, char **argv) {
 
     frame_buffer = (unsigned int *)malloc(WIDTH * ((HEIGHT + 7) / 8));
@@ -869,11 +871,16 @@ int main(int argc, char **argv) {
 
                 case 'o':
                     i2c_setup(&duart_b, 0, 9, 2, 5000);
-					i2c_read(&duart_b, 0x68, 0x00, 1);
 
                 //     ssd1306_begin(&duart_b, 0x3C);
                      break;
                 
+				case 's':
+					i2c_read(&duart_b, 0x68, 0x0f, 1);
+					//ssd1306_drawString_centre(at.data, (HEIGHT / 2));
+					//ssd1306_display(&duart_b, 0x3C);
+					break;
+
                 // // case ']':
                 // //     fill(0x00);
                 // //     ssd1306_display();
