@@ -7,6 +7,7 @@
 #include <printf.h>
 #include <string.h>
 #include <malloc.h>
+#include "ESPAT.h"
 
 typedef struct {
     uint16_t    r_ptr;
@@ -35,23 +36,52 @@ typedef enum {
     STATE_AWAIT_2,
     STATE_AWAIT_C,
     STATE_AWAIT_R2,
-    STATE_AWAIT_D2,
     STATE_AWAIT_COLON,
+    STATE_AWAIT_D2,
     STATE_AWAIT_DATA
 } STATE_ESP;
+
+typedef enum {
+    STATE_EMPTY,
+    STATE_AWAIT_COLON_C,
+    STATE_AWAIT_COMMA_C,
+    STATE_AWAIT_DATA_C
+} STATE_ESP_COMMA;
 
 typedef struct {
     ESP_QUERY_TYPE      type;
     ESP_QUERY_STATE     status;
     STATE_ESP           state;
-    uint8_t             data_len;
+    long                data_len;
     uint16_t            data_ptr;
-    char*               preamble;
-    uint8_t             query_data[64];
+    char                preamble[20];
+    uint8_t             query_data[4096];
+    bool                plus;
+    bool                colon;
+    bool                comma;
+    char                data_len_str[7];
 } ESP_Query;
 
 typedef struct {
+    ESP_QUERY_TYPE      type;
+    ESP_QUERY_STATE     status;
+    STATE_ESP_COMMA     state;
+    long                data_len;
+    uint16_t            data_ptr;
+    char                preamble[20];
+    uint8_t             query_data[4096];
+    bool                plus;
+    bool                colon;
+    bool                comma;
+    char                data_len_str[7];
+} ESP_Query_Comma;
+
+extern ESP_Query I2C;
+extern ESP_Query_Comma HTTPGET;
+
+typedef struct {
     STATE_ESP      state;
+    bool           echo;
     // uint8_t     packet[2048];          // I don't know how big this needs to be - size of biggest packet
     // uint16_t    packet_ptr;            // If packet array gets bigger, this needs more bits too...
     // uint16_t    remain_len;            // Fill length remaining (only valid in STATE_FILL_DATA)
@@ -64,7 +94,9 @@ void nop_loop(uint16_t n);
 
 uint16_t process_incoming_esp(State_esp *state);
 
-void i2c_read(CharDevice *uart, unsigned int i2caddr, uint8_t reg, uint8_t len);
+ESP_Query_Comma http_get(State_esp *state, CharDevice *uart);
+
+ESP_Query i2c_read(State_esp *state, CharDevice *uart, unsigned int i2caddr, uint8_t reg, uint8_t len);
 
 void i2c_write(CharDevice *uart, unsigned int i2caddr, uint8_t cmd);
 

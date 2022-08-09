@@ -1,5 +1,7 @@
 #include "ESPAT.H"
 
+#include <stdlib.h>
+
 static const unsigned char font[] = {
         0x00, 0x00, 0x00, 0x00, 0x00,
 	0x3E, 0x5B, 0x4F, 0x5B, 0x3E,
@@ -811,15 +813,34 @@ uint16_t gb_y = 5;
 extern void install_interrupt(CharDevice *device, RingBuffer *uart_a, RingBuffer *uart_b);
 extern void remove_interrupt();
 
+extern ESP_Query I2C;
+extern ESP_Query_Comma HTTPGET;
 
+uint8_t bcd(uint8_t val)
+{
+  return( (val/10*16) + (val%10) );
+}
+
+char *time = __TIME__;
+char hour[3];
+char min[3]; 
+char sec[3];
 
 static RingBuffer uart_b;
 
-// extern AT_packet at;
+
 
 int main(int argc, char **argv) {
 
     frame_buffer = (unsigned int *)malloc(WIDTH * ((HEIGHT + 7) / 8));
+
+	// strncpy(hour, &time[0], 2);
+	// char hour_bcd = bcd(atoi(hour) + 1);
+	// strncpy(min, &time[3], 2);
+	// char min_bcd = bcd(atoi(min));
+	// strncpy(sec, &time[6], 2);
+	// char sec_bcd = bcd(atoi(sec) + 10); //fudging for time between building and uploading.
+
 
     (void)argc;
     (void)argv;
@@ -841,10 +862,10 @@ int main(int argc, char **argv) {
     install_interrupt(&duart_b, NULL, &uart_b);
 
     if (mcGetDevice(0, &duart_a)) fctprintf(mcSendDevice, &duart_a, "\f");
-    
     if (mcGetDevice(1, &duart_b)) fctprintf(mcSendDevice, &duart_b, "\r");
+	//if (mcGetDevice(1, &duart_b)) fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
     
-    if (mcGetDevice(1, &duart_b)) fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
+    //if (mcGetDevice(1, &duart_b)) fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
     
 
     // State stateA;
@@ -854,8 +875,9 @@ int main(int argc, char **argv) {
     State_esp stateB;
     stateB.state = STATE_DISCARD;
     stateB.ringBuffer = &uart_b;
-
-	fctprintf(mcSendDevice, &duart_a, "Pre loop\n");
+	stateB.echo = true;
+	
+	//printf("\r\n%d:%d:%d\r\n", hour_i, min_i, sec_i);
 
     while (true) {            
         
@@ -865,28 +887,68 @@ int main(int argc, char **argv) {
 			// fctprintf(mcSendDevice, &duart_a, "I have char %c\n", c);
             switch(c) {
 
-                 case '/':
-                     fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
-                     break;
+                //  case '/':
+                //      fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
+                //      break;
 
-                case 'o':
-                    i2c_setup(&duart_b, 0, 9, 2, 5000);
+                // case 'o':
+                //     i2c_setup(&duart_b, 0, 9, 2, 5000);
 
-                //     ssd1306_begin(&duart_b, 0x3C);
-                     break;
+                // //     ssd1306_begin(&duart_b, 0x3C);
+                //      break;
                 
-				case 's':
-					i2c_read(&duart_b, 0x68, 0x0f, 1);
-					//ssd1306_drawString_centre(at.data, (HEIGHT / 2));
-					//ssd1306_display(&duart_b, 0x3C);
-					break;
+				// case 's': ;
+				// 	ESP_Query r = i2c_read(&stateB, &duart_b, 0x68, 0x00, 7);
+				// 	printf("Completed a query with values:\r\n\n");
+				// 	for (int j = 0; j < r.data_len; j++) {
+				
+				// 		printf("Byte %d: 0x%02x\r\n", j, r.query_data[j]);
 
-                // // case ']':
-                // //     fill(0x00);
-                // //     ssd1306_display();
-                // //     break;
+				// 	}
+	
+				// 	//ssd1306_drawString_centre(at.data, (HEIGHT / 2));
+				// 	//ssd1306_display(&duart_b, 0x3C);
+				// 	break;
+
+				// case '`':
+				// 	i2c_setup(&duart_b, 0, 9, 2, 100000);
+				// 	i2c_write_2(&duart_b, 0x68, 0x00, sec_bcd);
+				// 	i2c_write_2(&duart_b, 0x68, 0x01, min_bcd);
+				// 	i2c_write_2(&duart_b, 0x68, 0x02, hour_bcd);
+				// 	i2c_write_2(&duart_b, 0x68, 0x03, 0x06);
+				// 	i2c_write_2(&duart_b, 0x68, 0x04, 0x06);
+				// 	i2c_write_2(&duart_b, 0x68, 0x05, 0x08);
+				// 	i2c_write_2(&duart_b, 0x68, 0x06, 0x22);
+				// 	//ssd1306_drawString_centre(at.data, (HEIGHT / 2));
+				// 	//ssd1306_display(&duart_b, 0x3C);
+				// 	break;				
+
+				// case 'z':
+				// 	stateB.echo = false;
+				// 	break;
+
+				// case 'x':
+				// 	stateB.echo = true;
+				// 	break;
+
+                case 'h':
+					http_get(&stateB, &duart_b);
+                    break;
                 
                 // case '[':
+				// 	if (mcDeviceCtrl(0, 0xBB, &duart_b)) {
+				// 	    printf("Baudrate set to 9600\n");
+				// 	}
+				// 	break;
+
+				// case ']':
+				// 	if (mcDeviceCtrl(0, 0x88, &duart_b)) {
+				// 	    printf("Baudrate set to 115200\n");
+				// 	}
+				// 	break;
+
+
+				// case '[':
                 //     ssd1306_clearDisplay();
                 //     ssd1306_display(&duart_b, 0x3C);
                 //     break;
