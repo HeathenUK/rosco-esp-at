@@ -48,9 +48,12 @@ install_interrupt::
 
         ; Ensure UART B is set up just like we like it...
         move.b  #$88,DUART_CSRB(A0)             ; 115K2
+        ;move.b  #$BB,DUART_CSRB(A0)             ; 9600
         move.b  #$10,DUART_CRB(A0)              ; Reset to MR1B
         move.b  #$13,DUART_MRB(A0)              ; Ensure No RTS, RxRDY, Char, No parity, 8 bits
         move.b  #$07,DUART_MRB(A0)              ; (Normal, No TX CTS/RTS, 1 stop bit)
+        ;move.b  #$93,DUART_MRB(A0)              ; RTS, RxRDY, Char, No parity, 8 bits
+        ;move.b  #$37,DUART_MRB(A0)              ; (Normal, TX CTS/RTS, 1 stop bit)
 
 .done
         move.l  A0,BASEADDR                     ; Store BASEADDR base pointer

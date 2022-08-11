@@ -16,7 +16,7 @@
 #define DEBUGF(...)
 #endif
 
-#define STANDARD_NOP 300
+#define STANDARD_NOP 500
 
 void nop_loop(uint16_t n) {
 
@@ -57,7 +57,7 @@ uint16_t process_incoming_esp(State_esp *state) {
         // static char preamble[10];
         uint8_t preamble_ptr = 0;
         uint8_t data_len_str_ptr = 0;
-        static uint16_t data_ptr = 0;
+        static uint16_t data_ptr = 1;
         
         HTTPGET.data_ptr = 0;
         // static char preamble_check[10];
@@ -196,7 +196,7 @@ uint16_t process_incoming_esp(State_esp *state) {
             }
 
             else if (HTTPGET.status == QUERY_RAISED) {
-                printf("\n[H]");
+                //printf("\n[H]");
                 switch(HTTPGET.state) {
                     
                     case STATE_EMPTY:
@@ -225,7 +225,8 @@ uint16_t process_incoming_esp(State_esp *state) {
                                 HTTPGET.state = STATE_AWAIT_DATA_C;
                                 data_ptr = 0;
                                 DEBUGF("Got a comma!\r\n");
-                                CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "Preamble: %s, Length: %d\r\n",HTTPGET.preamble, atoi(HTTPGET.data_len_str)); };
+                                CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "Preamble: %s, Length: %s\r\n",HTTPGET.preamble, HTTPGET.data_len_str); };
+                                printf("\r\f");
                         } else {
 
                             HTTPGET.data_len_str[data_len_str_ptr++] = buffer[i];
@@ -235,9 +236,14 @@ uint16_t process_incoming_esp(State_esp *state) {
 
                     case STATE_AWAIT_DATA_C:
 
-                        if (data_ptr == atoi(HTTPGET.data_len_str))
+                        if (data_ptr == atoi(HTTPGET.data_len_str) - 1)
                         {
-                            printf("\nI'm done!\n");
+                            HTTPGET.query_data[data_ptr++] = buffer[i];
+                            //CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "%d out of %d\r\n", data_ptr - 1, atoi(HTTPGET.data_len_str) - 1); };
+                            CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "0X%02X", buffer[i]); };
+                            printf("%03d:%02X ", (data_ptr - 1), buffer[i]);
+                            if(data_ptr % 14 == 0 && data_ptr != 0 ) printf("\n");
+
                             HTTPGET.state = STATE_EMPTY;
                             HTTPGET.status = QUERY_READY;
                             preamble_ptr = 0;
@@ -248,9 +254,11 @@ uint16_t process_incoming_esp(State_esp *state) {
 
                         } else {
                             
-                            CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "%d out of %d\r\n", data_ptr, atoi(HTTPGET.data_len_str)); };
                             HTTPGET.query_data[data_ptr++] = buffer[i];
-                            printf("(%d)[0x%02x]", data_ptr, buffer[i]);
+                            //CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "%d out of %d\r\n", data_ptr - 1, atoi(HTTPGET.data_len_str) - 1); };
+                            CharDevice duart_a;if (mcGetDevice(0, &duart_a)) { fctprintf(mcSendDevice, &duart_a, "0X%02X, ", buffer[i]); };
+                            printf("%03d:%02X ", (data_ptr - 1), buffer[i]);
+                            if(data_ptr % 14 == 0 && data_ptr != 0 ) printf("\n");
 
                         }
                         break;
@@ -260,7 +268,7 @@ uint16_t process_incoming_esp(State_esp *state) {
             }
 
             //else if (state->echo) printf("[0x%02x]", buffer[i]);
-            else if (state->echo) printf("%c", buffer[i]);
+            else if ((buffer[i] != '\f') && ((state->echo))) printf("%c", buffer[i]);
         
         last_c = buffer[i];
         }
@@ -272,6 +280,21 @@ ESP_Query_Comma http_get(State_esp *state, CharDevice *uart) {
 
     //fctprintf(mcSendDevice, uart, "\rAT+HTTPCGET=\"https://people.math.sc.edu/Burkardt/data/bmp/all_gray.bmp\"\r");
     fctprintf(mcSendDevice, uart, "\rAT+HTTPCGET=\"https://www.w3.org/People/mimasa/test/imgformat/img/w3c_home_2.bmp\"\r");
+    nop_loop(STANDARD_NOP);
+    HTTPGET.status = QUERY_RAISED;
+    while (HTTPGET.status != QUERY_READY) {
+        nop_loop(STANDARD_NOP);
+        process_incoming_esp(state);
+    }
+    return HTTPGET;
+}
+
+ESP_Query_Comma http_get2(State_esp *state, CharDevice *uart) {
+
+    //fctprintf(mcSendDevice, uart, "\rAT+HTTPCGET=\"https://people.math.sc.edu/Burkardt/data/bmp/all_gray.bmp\"\r");
+    fctprintf(mcSendDevice, uart, "AT+HTTPCLIENT=2,0,\"https://www.w3.org/People/mimasa/test/imgformat/img/w3c_home_2.bmp\",\"www.w3.org\",\"/People/mimasa/test/imgformat/img/w3c_home_2.bmp\",2\r");
+    
+//    https://www.w3.org/People/mimasa/test/imgformat/img/w3c_home_2.bmp
     
     nop_loop(STANDARD_NOP);
     HTTPGET.status = QUERY_RAISED;

@@ -891,24 +891,24 @@ int main(int argc, char **argv) {
                 //      fctprintf(mcSendDevice, &duart_b, "AT+RST\r");
                 //      break;
 
-                // case 'o':
-                //     i2c_setup(&duart_b, 0, 9, 2, 5000);
+                case 'o':
+                    i2c_setup(&duart_b, 0, 9, 2, 5000);
 
-                // //     ssd1306_begin(&duart_b, 0x3C);
-                //      break;
+                //     ssd1306_begin(&duart_b, 0x3C);
+                     break;
                 
-				// case 's': ;
-				// 	ESP_Query r = i2c_read(&stateB, &duart_b, 0x68, 0x00, 7);
-				// 	printf("Completed a query with values:\r\n\n");
-				// 	for (int j = 0; j < r.data_len; j++) {
+				case 's': ;
+					ESP_Query r = i2c_read(&stateB, &duart_b, 0x68, 0x00, 7);
+					printf("Completed a query with values:\r\n\n");
+					for (int j = 0; j < r.data_len; j++) {
 				
-				// 		printf("Byte %d: 0x%02x\r\n", j, r.query_data[j]);
+						printf("Byte %d: 0x%02x\r\n", j, r.query_data[j]);
 
-				// 	}
+					}
 	
 				// 	//ssd1306_drawString_centre(at.data, (HEIGHT / 2));
 				// 	//ssd1306_display(&duart_b, 0x3C);
-				// 	break;
+				 	break;
 
 				// case '`':
 				// 	i2c_setup(&duart_b, 0, 9, 2, 100000);
@@ -935,6 +935,9 @@ int main(int argc, char **argv) {
 					http_get(&stateB, &duart_b);
                     break;
                 
+				case 'p':
+					http_get2(&stateB, &duart_b);
+					break;
                 // case '[':
 				// 	if (mcDeviceCtrl(0, 0xBB, &duart_b)) {
 				// 	    printf("Baudrate set to 9600\n");

@@ -95,6 +95,7 @@ void nop_loop(uint16_t n);
 uint16_t process_incoming_esp(State_esp *state);
 
 ESP_Query_Comma http_get(State_esp *state, CharDevice *uart);
+ESP_Query_Comma http_get2(State_esp *state, CharDevice *uart);
 
 ESP_Query i2c_read(State_esp *state, CharDevice *uart, unsigned int i2caddr, uint8_t reg, uint8_t len);
 
